@@ -1,0 +1,106 @@
+const defaultResponse = "0";
+const user = 'username';
+const pass = 'username';
+
+
+async function sub(r) {
+
+
+
+
+       let res = await r.subrequest('/backend');
+
+
+        var header = res.headersOut['Content-Type'];
+
+        r.log(`header: ${header}`);
+
+         var result_header = header.includes('html');
+
+        if (!result_header) {
+           r.return(res.status, res.responseBuffer)
+           return;
+
+
+        }
+
+    const zone = r.variables['rl_zone_name'];
+    const kv = zone && ngx.shared && ngx.shared[zone];
+    if (!kv) {
+        r.log(`ratelimit: ${zone} js_shared_dict_zone not found`);
+        r.return(res.status, res.responseBuffer)
+           return;
+
+    }
+
+    const key = r.variables['rl_key'] || r.variables['remote_addr'];
+    const window = Number(r.variables['rl_windows_ms']) || 60000;
+    const limit = Number(r.variables['rl_limit']) || 10;
+    const now = Date.now();
+
+    let requestData = kv.get(key);
+    if (requestData === undefined || requestData.length === 0) {
+        requestData = { timestamp: now, count: 1 }
+        kv.set(key, JSON.stringify(requestData));
+        r.return(res.status, res.responseBuffer)
+           return;
+
+    }
+    try {
+        requestData = JSON.parse(requestData);
+    } catch (e) {
+        requestData = { timestamp: now, count: 1 }
+        kv.set(key, JSON.stringify(requestData));
+        r.return(res.status, res.responseBuffer)
+             return;
+    }
+    if (!requestData) {
+        requestData = { timestamp: now, count: 1 }
+        kv.set(key, JSON.stringify(requestData));
+        r.return(res.status, res.responseBuffer)
+             return;
+    }
+    if (now - requestData.timestamp >= window) {
+        requestData.timestamp = now;
+        requestData.count = 1;
+    } else {
+        requestData.count++;
+    }
+    const elapsed = now - requestData.timestamp;
+    r.log(`limit: ${limit} window: ${window} elapsed: ${elapsed}  count: ${requestData.count} timestamp: ${requestData.timestamp}`)
+    let retryAfter = 0;
+    if (requestData.count > limit) {
+             retryAfter = 1;
+    }
+    kv.set(key, JSON.stringify(requestData));
+
+           if (retryAfter) {
+
+ let ip = r.variables['remote_addr'];
+ let body = '{"' + ip + '": "1"}';
+
+ let method = r.args.method ? r.args.method : 'POST';
+
+                   let res = await r.subrequest('/api/7/http/keyvals/one', { method, body: body});
+
+
+            r.return(401, "Unauthorized\n");
+            return;
+   }
+
+          r.return(res.status, res.responseBuffer)
+          return;
+}
+
+
+
+function header(r) {
+
+
+ r.headersOut['Content-Type'] = "text/html";
+
+}
+
+
+
+export default {sub, header, ratelimit, parseRequestBody, log};
