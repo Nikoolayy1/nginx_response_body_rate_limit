@@ -1,1 +1,1 @@
-# nginx_response_body_rate_limit
+For response body rate limit the subrequest option can be used where the javascript sends a subrequest " let res = await r.subrequest('/backend'); " but I don't recomment it as seems to not scale well. Also the response then seems to be with the wrong header but then the in the internal location the " function header(r) { r.headersOut['Content-Type'] = "text/html";} " can be used to fix this.
